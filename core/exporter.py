@@ -1,9 +1,9 @@
 """
 Module xuất báo cáo kết quả dịch và làm nét ảnh.
 Hỗ trợ xuất ra:
-1. File Excel (.xlsx) với định dạng đẹp mắt, có thông tin chi tiết và link ảnh.
-2. File HTML tương tác (.html) xem trực quan so sánh Trước/Sau và toàn bộ bản dịch.
-3. File Word (.docx) chứa bảng biểu và ảnh nhúng.
+1. File Excel (.xlsx) với định dạng đẹp mắt, có đường dẫn ảnh gốc, ảnh GPT sinh ra và nội dung dịch.
+2. File HTML tương tác (.html) xem trực quan so sánh Ảnh Gốc vs Ảnh GPT Mô Phỏng & Dịch.
+3. File Word (.docx) chứa bảng biểu và ảnh nhúng trực tiếp.
 """
 
 import os
@@ -31,32 +31,51 @@ except ImportError:
 
 class ResultExporter:
     @staticmethod
-    def export_all(results: List[Dict[str, Any]], output_dir: str, base_name: str = "ket_qua_dich_va_lam_net") -> Dict[str, str]:
+    def export_all(
+        results: List[Dict[str, Any]], 
+        output_dir: str, 
+        base_name: str = "ket_qua_dich_va_lam_net",
+        export_options: Optional[Dict[str, bool]] = None
+    ) -> Dict[str, str]:
         """
-        Xuất toàn bộ báo cáo (Excel, HTML, Word nếu có) và trả về đường dẫn các file đã tạo.
+        Chỉ xuất báo cáo khi người dùng tích chọn.
+        Nếu không tích chọn tùy chọn nào, tuyệt đối không tạo bất kỳ file báo cáo nào.
         """
+        if not export_options:
+            export_options = {}
+
+        do_excel = export_options.get("excel", False)
+        do_html = export_options.get("html", False)
+        do_docx = export_options.get("docx", False)
+
+        # Nếu người dùng bỏ tích toàn bộ thì không tạo file nào
+        if not (do_excel or do_html or do_docx):
+            return {}
+
         os.makedirs(output_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         files = {}
 
         # 1. Xuất Excel
-        excel_path = os.path.join(output_dir, f"{base_name}_{timestamp}.xlsx")
-        try:
-            ResultExporter.export_to_excel(results, excel_path)
-            files["excel"] = excel_path
-        except Exception as e:
-            print(f"Lỗi khi xuất Excel: {e}")
+        if do_excel:
+            excel_path = os.path.join(output_dir, f"{base_name}_{timestamp}.xlsx")
+            try:
+                ResultExporter.export_to_excel(results, excel_path)
+                files["excel"] = excel_path
+            except Exception as e:
+                print(f"Lỗi khi xuất Excel: {e}")
 
         # 2. Xuất HTML
-        html_path = os.path.join(output_dir, f"{base_name}_{timestamp}.html")
-        try:
-            ResultExporter.export_to_html(results, html_path)
-            files["html"] = html_path
-        except Exception as e:
-            print(f"Lỗi khi xuất HTML: {e}")
+        if do_html:
+            html_path = os.path.join(output_dir, f"{base_name}_{timestamp}.html")
+            try:
+                ResultExporter.export_to_html(results, html_path)
+                files["html"] = html_path
+            except Exception as e:
+                print(f"Lỗi khi xuất HTML: {e}")
 
         # 3. Xuất Word
-        if HAS_DOCX:
+        if do_docx and HAS_DOCX:
             docx_path = os.path.join(output_dir, f"{base_name}_{timestamp}.docx")
             try:
                 ResultExporter.export_to_docx(results, docx_path)
@@ -95,10 +114,11 @@ class ResultExporter:
         headers = [
             "STT", 
             "Tên File Gốc", 
-            "Độ Phân Giải Gốc", 
-            "Độ Phân Giải Mới", 
-            "Bản Dịch Tiếng Việt (GPT)", 
-            "Đường Dẫn Ảnh Đã Làm Nét", 
+            "Kích Thước Gốc", 
+            "Ảnh GPT Sinh Ra (Size)", 
+            "Đường Dẫn Ảnh GPT Đã Dịch", 
+            "Đường Dẫn Làm Nét Cục Bộ", 
+            "Nội Dung Dịch / Ghi Chú (GPT)", 
             "Trạng Thái",
             "Thời Gian"
         ]
@@ -116,13 +136,17 @@ class ResultExporter:
             status = "Thành công" if res.get("success", False) else "Lỗi"
             status_color = "059669" if status == "Thành công" else "DC2626"
 
+            gpt_img = res.get("gpt_image_path", "") or res.get("generated_image_path", "")
+            gpt_size = res.get("gpt_image_size", "") or res.get("generated_image_size", "-")
+
             cells_data = [
                 (row_idx - 1, center_align, regular_font),
                 (res.get("original_filename", ""), left_align, bold_font),
                 (res.get("original_size", "-"), center_align, regular_font),
-                (res.get("enhanced_size", "-"), center_align, regular_font),
-                (res.get("gpt_translation", "Không có nội dung"), left_align, regular_font),
+                (gpt_size if gpt_size else "-", center_align, regular_font),
+                (gpt_img if gpt_img else "-", left_align, regular_font),
                 (res.get("enhanced_path", "-"), left_align, regular_font),
+                (res.get("gpt_translation", "Không có nội dung"), left_align, regular_font),
                 (status, center_align, Font(name="Segoe UI", size=10, bold=True, color=status_color)),
                 (res.get("timestamp", datetime.now().strftime("%H:%M:%S")), center_align, regular_font)
             ]
@@ -142,11 +166,12 @@ class ResultExporter:
             1: 8,   # STT
             2: 25,  # Tên file
             3: 16,  # Kích thước gốc
-            4: 16,  # Kích thước mới
-            5: 65,  # Nội dung dịch
-            6: 35,  # Đường dẫn ảnh
-            7: 15,  # Trạng thái
-            8: 15   # Thời gian
+            4: 18,  # Kích thước GPT
+            5: 35,  # Đường dẫn ảnh GPT
+            6: 30,  # Đường dẫn làm nét
+            7: 55,  # Nội dung dịch
+            8: 15,  # Trạng thái
+            9: 15   # Thời gian
         }
         for col_idx, width in col_widths.items():
             col_letter = get_column_letter(col_idx)
@@ -165,12 +190,36 @@ class ResultExporter:
         for idx, res in enumerate(results, start=1):
             orig_name = html.escape(res.get("original_filename", f"Ảnh #{idx}"))
             orig_path = res.get("original_path", "").replace("\\", "/")
+            gpt_img_path = (res.get("gpt_image_path", "") or res.get("generated_image_path", "")).replace("\\", "/")
             enh_path = res.get("enhanced_path", "").replace("\\", "/")
             orig_size = res.get("original_size", "-")
+            gpt_size = res.get("gpt_image_size", "") or res.get("generated_image_size", "")
             enh_size = res.get("enhanced_size", "-")
             translation = html.escape(res.get("gpt_translation", "Chưa có nội dung dịch")).replace("\n", "<br>")
-            status = "Thành công" if res.get("success", False) else "Lỗi"
             status_badge = '<span class="badge badge-success">Thành công</span>' if res.get("success", False) else '<span class="badge badge-danger">Lỗi</span>'
+
+            # Hiển thị ảnh kết quả chính (ưu tiên ảnh do GPT vẽ & dịch)
+            main_result_html = ""
+            if gpt_img_path and os.path.exists(gpt_img_path):
+                main_result_html = f"""
+                <div class="image-box highlight-box">
+                    <div class="image-label image-label-gpt">✨ Ảnh ChatGPT Mô Phỏng & Dịch Trực Tiếp ({gpt_size or 'HD'})</div>
+                    <img src="file:///{gpt_img_path}" alt="Ảnh GPT tạo" loading="lazy">
+                    <div style="margin-top: 8px;">
+                        <a href="file:///{gpt_img_path}" target="_blank" class="btn-link">🔍 Mở ảnh GPT kích thước gốc</a>
+                    </div>
+                </div>
+                """
+            elif enh_path and os.path.exists(enh_path):
+                main_result_html = f"""
+                <div class="image-box">
+                    <div class="image-label image-label-enhanced">Ảnh Đã Làm Nét ({enh_size})</div>
+                    <img src="file:///{enh_path}" alt="Ảnh đã làm nét" loading="lazy">
+                    <div style="margin-top: 8px;">
+                        <a href="file:///{enh_path}" target="_blank" class="btn-link">Mở ảnh nét đầy đủ</a>
+                    </div>
+                </div>
+                """
 
             card = f"""
             <div class="result-card">
@@ -184,16 +233,10 @@ class ResultExporter:
                             <div class="image-label">Ảnh Gốc ({orig_size})</div>
                             <img src="file:///{orig_path}" alt="Ảnh gốc" loading="lazy" onerror="this.src='';this.alt='Không tìm thấy ảnh gốc';">
                         </div>
-                        <div class="image-box">
-                            <div class="image-label image-label-enhanced">Ảnh Đã Làm Nét 2x/4x ({enh_size})</div>
-                            <img src="file:///{enh_path}" alt="Ảnh đã làm nét" loading="lazy" onerror="this.src='';this.alt='Không tìm thấy ảnh làm nét';">
-                            <div style="margin-top: 8px;">
-                                <a href="file:///{enh_path}" target="_blank" class="btn-link">Mở ảnh nét đầy đủ</a>
-                            </div>
-                        </div>
+                        {main_result_html}
                     </div>
                     <div class="translation-section">
-                        <div class="translation-title">Bản Dịch Tiếng Việt:</div>
+                        <div class="translation-title">Nội Dung / Bản Dịch Từ ChatGPT:</div>
                         <div class="translation-box">{translation}</div>
                     </div>
                 </div>
@@ -206,7 +249,7 @@ class ResultExporter:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Báo Cáo Kết Quả Dịch & Làm Nét Ảnh - AI</title>
+    <title>Báo Cáo Kết Quả Dịch & Làm Nét Ảnh - AI ChatGPT</title>
     <style>
         :root {{
             --primary: #2563eb;
@@ -237,10 +280,12 @@ class ResultExporter:
         .images-container {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }}
         @media (max-width: 768px) {{ .images-container {{ grid-template-columns: 1fr; }} }}
         .image-box {{ background: #f8fafc; border: 1px dashed var(--border); border-radius: 10px; padding: 12px; text-align: center; }}
+        .highlight-box {{ border: 2px solid #3b82f6; background: #eff6ff; }}
         .image-label {{ font-size: 13px; font-weight: 600; margin-bottom: 10px; color: var(--text-muted); }}
         .image-label-enhanced {{ color: var(--primary); }}
-        .image-box img {{ max-width: 100%; max-height: 380px; object-fit: contain; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }}
-        .btn-link {{ display: inline-block; font-size: 13px; color: var(--primary); text-decoration: none; font-weight: 500; }}
+        .image-label-gpt {{ color: #1d4ed8; font-size: 14px; font-weight: 700; }}
+        .image-box img {{ max-width: 100%; max-height: 480px; object-fit: contain; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }}
+        .btn-link {{ display: inline-block; font-size: 13px; color: var(--primary); text-decoration: none; font-weight: 600; }}
         .btn-link:hover {{ text-decoration: underline; }}
         .translation-section {{ background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; }}
         .translation-title {{ font-weight: 600; font-size: 14px; margin-bottom: 10px; color: #334155; }}
@@ -249,8 +294,8 @@ class ResultExporter:
 </head>
 <body>
     <div class="header">
-        <h1>Báo Cáo Tổng Hợp: Dịch & Làm Nét Hình Ảnh (AI ChatGPT)</h1>
-        <p>Tự động hóa dịch ngữ nghĩa và nâng cấp độ phân giải hình ảnh</p>
+        <h1>Báo Cáo Tổng Hợp: Mô Phỏng, Dịch & Làm Nét Ảnh (ChatGPT AI)</h1>
+        <p>Tự động hóa Chrome tạo ảnh nét & dịch chữ trực tiếp lên ảnh qua AI ChatGPT</p>
         <div class="stats-bar">
             <div class="stat-item">Tổng số ảnh: {total}</div>
             <div class="stat-item">Thành công: {success_count}</div>
@@ -261,45 +306,82 @@ class ResultExporter:
         {"".join(cards_html)}
     </div>
 </body>
-</html>"""
-
+</html>
+"""
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(html_content)
-
         return file_path
 
     @staticmethod
     def export_to_docx(results: List[Dict[str, Any]], file_path: str) -> str:
-        """Xuất báo cáo ra định dạng Word (.docx) kèm ảnh và bản dịch"""
+        """Xuất báo cáo tài liệu Word (.docx) chứa đối chiếu ảnh và bản dịch"""
         if not HAS_DOCX:
-            return ""
+            raise ImportError("Thư viện python-docx chưa được cài đặt.")
 
         doc = Document()
-        doc.add_heading("Báo Cáo Kết Quả Dịch & Làm Nét Ảnh - AI", level=0)
 
-        p = doc.add_paragraph()
-        p.add_run(f"Thời gian tạo: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n").italic = True
-        p.add_run(f"Tổng số ảnh xử lý: {len(results)}\n")
+        # Tiêu đề tài liệu
+        p_title = doc.add_paragraph()
+        run_title = p_title.add_run("BÁO CÁO KẾT QUẢ DỊCH & LÀM NÉT HÌNH ẢNH (AI CHATGPT)")
+        run_title.font.name = "Segoe UI"
+        run_title.font.size = Pt(18)
+        run_title.font.bold = True
+        run_title.font.color.rgb = RGBColor(30, 58, 138)
+        p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
+        p_sub = doc.add_paragraph()
+        run_sub = p_sub.add_run(f"Ngày xuất: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')} | Tổng số ảnh: {len(results)}")
+        run_sub.font.name = "Segoe UI"
+        run_sub.font.size = Pt(10)
+        run_sub.font.italic = True
+        run_sub.font.color.rgb = RGBColor(100, 116, 139)
+        p_sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        doc.add_paragraph()
+
+        # Từng mục ảnh
         for idx, res in enumerate(results, start=1):
-            doc.add_heading(f"#{idx}. {res.get('original_filename', 'Ảnh')}", level=1)
-            
-            p_info = doc.add_paragraph()
-            p_info.add_run(f"Kích thước gốc: {res.get('original_size', '-')} | Kích thước sau làm nét: {res.get('enhanced_size', '-')}\n")
+            p_item = doc.add_paragraph()
+            r_item = p_item.add_run(f"Ảnh #{idx}: {res.get('original_filename', '')}")
+            r_item.font.name = "Segoe UI"
+            r_item.font.size = Pt(13)
+            r_item.font.bold = True
+            r_item.font.color.rgb = RGBColor(37, 99, 235)
 
-            # Thêm ảnh đã làm nét nếu tồn tại
+            # Bảng so sánh 2 cột ảnh
+            table = doc.add_table(rows=1, cols=2)
+            table.alignment = WD_TABLE_ALIGNMENT.CENTER
+            row_cells = table.rows[0].cells
+
+            orig_path = res.get("original_path", "")
+            gpt_img_path = res.get("gpt_image_path", "") or res.get("generated_image_path", "")
             enh_path = res.get("enhanced_path", "")
-            if os.path.exists(enh_path):
-                try:
-                    doc.add_paragraph("Ảnh sau khi làm nét:")
-                    doc.add_picture(enh_path, width=Inches(4.5))
-                except Exception:
-                    pass
+            result_img = gpt_img_path if (gpt_img_path and os.path.exists(gpt_img_path)) else enh_path
 
-            doc.add_heading("Bản dịch & Phân tích từ GPT:", level=2)
-            doc.add_paragraph(res.get("gpt_translation", "Không có nội dung dịch."))
-            doc.add_paragraph("-" * 40)
+            # Cột 1: Ảnh gốc
+            p_c1 = row_cells[0].paragraphs[0]
+            p_c1.add_run(f"Ảnh Gốc ({res.get('original_size', '-')})\n").bold = True
+            if os.path.exists(orig_path):
+                try:
+                    row_cells[0].paragraphs[0].add_run().add_picture(orig_path, width=Inches(3.0))
+                except Exception:
+                    row_cells[0].paragraphs[0].add_run("(Lỗi hiển thị ảnh gốc)")
+
+            # Cột 2: Ảnh kết quả
+            p_c2 = row_cells[1].paragraphs[0]
+            label_c2 = "Ảnh GPT Đã Dịch & Mô Phỏng" if gpt_img_path else "Ảnh Đã Làm Nét"
+            p_c2.add_run(f"{label_c2}\n").bold = True
+            if os.path.exists(result_img):
+                try:
+                    row_cells[1].paragraphs[0].add_run().add_picture(result_img, width=Inches(3.0))
+                except Exception:
+                    row_cells[1].paragraphs[0].add_run("(Lỗi hiển thị ảnh kết quả)")
+
+            # Bản dịch text
+            p_trans = doc.add_paragraph()
+            p_trans.add_run("Bản dịch / Phản hồi từ ChatGPT:\n").bold = True
+            p_trans.add_run(res.get("gpt_translation", "Không có nội dung dịch."))
+            doc.add_paragraph()
 
         doc.save(file_path)
         return file_path
-

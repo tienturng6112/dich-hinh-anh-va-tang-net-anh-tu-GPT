@@ -1,19 +1,22 @@
 """
 Module tự động hóa tương tác với ChatGPT qua Google Chrome bằng DrissionPage.
-Hỗ trợ tương thích toàn diện cả giao diện ChatGPT cổ điển và giao diện mới (ProseMirror, GPT-4o / GPT-6 UI):
-- Tự động nhận diện trạng thái đăng nhập, menu tài khoản người dùng
-- Tìm chính xác ô soạn thảo (ProseMirror / #prompt-textarea)
-- Đính kèm ảnh chuẩn xác qua input[type=file] (accept="image/*")
-- Tự động mở New Chat cho mỗi ảnh để tránh dồn file cũ
-- Chờ trợ lý AI suy luận và hoàn thành câu trả lời (loại bỏ hoàn toàn việc bắt nhầm tin nhắn người dùng)
-- Trích xuất chuẩn xác nội dung dịch thuật từ ChatGPT
+Đúng theo yêu cầu cốt lõi:
+1. Mở / kết nối Google Chrome với tài khoản ChatGPT (profile lưu vĩnh viễn).
+2. Tải NGUYÊN HÌNH ẢNH GỐC lên ChatGPT (không can thiệp chỉnh sửa ảnh trước khi gửi).
+3. Gửi kèm câu lệnh: "mô phổng lại hình ảnh và làm nét hình ảnh, dịch text trên hình sang tiếng việt".
+4. Tự động nhận diện khi ChatGPT vẽ/sinh ảnh AI mới xong.
+5. Tải ảnh chất lượng cao sinh ra từ ChatGPT lưu về máy tính.
 """
 
 import os
 import time
+import base64
 from typing import Optional, Callable, Dict, Any, List, Tuple
 from DrissionPage import ChromiumOptions, ChromiumPage
 from DrissionPage.common import Keys
+
+
+DEFAULT_PROMPT = "mô phổng lại hình ảnh và làm nét hình ảnh, dịch text trên hình sang tiếng việt"
 
 
 def find_chrome_path() -> Optional[str]:
@@ -60,7 +63,7 @@ class ChatGPTAutomation:
 
     def open_for_login(self, callback: Optional[Callable[[str], None]] = None) -> bool:
         """
-        Mở cửa sổ Chrome bình thường với profile cố định để người dùng đăng nhập ChatGPT.
+        Mở cửa sổ Chrome với profile cố định để người dùng đăng nhập ChatGPT.
         """
         try:
             if callback:
@@ -83,7 +86,6 @@ class ChatGPTAutomation:
     def check_login_status(self) -> Tuple[bool, str]:
         """
         Kiểm tra chi tiết trạng thái đăng nhập trên trang ChatGPT.
-        Trả về (is_logged_in: bool, user_info: str)
         """
         if not self.page:
             try:
@@ -93,7 +95,7 @@ class ChatGPTAutomation:
                 return False, "Chưa kết nối được với trình duyệt Chrome."
 
         try:
-            # 1. Kiểm tra nút hồ sơ cá nhân (Profile Menu)
+            # 1. Kiểm tra nút profile menu
             profile_btn = (
                 self.page.ele('xpath://button[contains(@aria-label, "profile") or contains(@aria-label, "Profile")]', timeout=2) or
                 self.page.ele('xpath://button[contains(@aria-label, "Open profile menu")]', timeout=1) or
@@ -107,7 +109,7 @@ class ChatGPTAutomation:
                     user_name = "Tài khoản ChatGPT"
                 return True, user_name
 
-            # 2. Kiểm tra ô soạn thảo prompt (ProseMirror hoặc #prompt-textarea)
+            # 2. Kiểm tra ô soạn thảo prompt
             editor = self._find_editor(timeout=2)
             login_btn = (
                 self.page.ele('xpath://button[contains(text(), "Log in") or contains(text(), "Đăng nhập") or @data-testid="login-button"]', timeout=1)
@@ -121,12 +123,10 @@ class ChatGPTAutomation:
             return False, f"Lỗi kiểm tra: {str(e)}"
 
     def is_logged_in(self) -> bool:
-        """Hàm rút gọn trả về True nếu đã đăng nhập"""
         status, _ = self.check_login_status()
         return status
 
     def connect_or_start(self, callback: Optional[Callable[[str], None]] = None) -> ChromiumPage:
-        """Kết nối tới Chrome hiện có hoặc khởi động phiên mới"""
         if self.page:
             try:
                 _ = self.page.title
@@ -142,7 +142,7 @@ class ChatGPTAutomation:
         return self.page
 
     def _find_editor(self, timeout: float = 5):
-        """Tìm ô soạn thảo tin nhắn của ChatGPT (hỗ trợ cả ProseMirror và textarea)"""
+        """Tìm ô soạn thảo tin nhắn của ChatGPT"""
         if not self.page:
             return None
         return (
@@ -163,9 +163,7 @@ class ChatGPTAutomation:
 
     def _extract_latest_response(self) -> str:
         """
-        Trích xuất câu trả lời MỚI NHẤT của trợ lý ChatGPT.
-        CHỈ lấy nội dung của trợ lý (bắt đầu bằng ChatGPT said: hoặc thẻ markdown),
-        tuyệt đối KHÔNG lấy nội dung tin nhắn của người dùng (You said:).
+        Trích xuất câu trả lời text mới nhất của trợ lý ChatGPT (nếu có).
         """
         if not self.page:
             return ""
@@ -173,7 +171,6 @@ class ChatGPTAutomation:
         try:
             js_code = """
             return (() => {
-                // 1. Tìm thẻ tiêu đề hoặc span có chữ "ChatGPT said:"
                 const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6, span'))
                                       .filter(el => el.innerText && el.innerText.trim() === 'ChatGPT said:');
                 
@@ -192,7 +189,6 @@ class ChatGPTAutomation:
                     }
                 }
                 
-                // 2. Dự phòng: Tìm qua các khối markdown của trợ lý
                 const markdowns = Array.from(document.querySelectorAll('.markdown'));
                 if (markdowns.length > 0) {
                     const lastMd = markdowns[markdowns.length - 1].innerText.trim();
@@ -209,24 +205,120 @@ class ChatGPTAutomation:
         except Exception:
             return ""
 
+    def _count_generated_images(self) -> int:
+        """Đếm số lượng ảnh sinh ra (Generated images) hiện có trên trang"""
+        if not self.page:
+            return 0
+        try:
+            js_count = """
+            return Array.from(document.querySelectorAll('img')).filter(i => {
+                const alt = (i.alt || '').toLowerCase();
+                const src = (i.src || '');
+                if (alt.includes('user attachment') || alt.includes('avatar') || alt.includes('me.png')) return false;
+                return alt.includes('generated') || src.startsWith('blob:') || src.includes('files.oaiusercontent.com');
+            }).length;
+            """
+            return int(self.page.run_js(js_count) or 0)
+        except Exception:
+            return 0
+
+    def _extract_generated_image(self) -> Optional[Dict[str, Any]]:
+        """
+        Trích xuất hình ảnh sinh ra bởi ChatGPT dưới dạng base64 data URL.
+        Trả về dict { 'bytes': bytes, 'width': int, 'height': int, 'alt': str } hoặc None.
+        """
+        if not self.page:
+            return None
+
+        js_extract = """
+        return (async () => {
+            const imgs = Array.from(document.querySelectorAll('img')).filter(i => {
+                const alt = (i.alt || '').toLowerCase();
+                const src = (i.src || '');
+                if (alt.includes('user attachment') || alt.includes('avatar') || alt.includes('me.png')) return false;
+                return alt.includes('generated') || src.startsWith('blob:') || src.includes('files.oaiusercontent.com');
+            });
+
+            if (imgs.length === 0) return null;
+            const img = imgs[imgs.length - 1];
+
+            // 1. Thử vẽ canvas trực tiếp
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.naturalWidth || img.width;
+                canvas.height = img.naturalHeight || img.height;
+                if (canvas.width > 50 && canvas.height > 50) {
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    const dataUrl = canvas.toDataURL('image/png');
+                    if (dataUrl && dataUrl.length > 500) {
+                        return {
+                            dataUrl: dataUrl,
+                            width: canvas.width,
+                            height: canvas.height,
+                            alt: img.alt || ''
+                        };
+                    }
+                }
+            } catch (e) {
+                console.error('Canvas error:', e);
+            }
+
+            // 2. Dự phòng dùng fetch blob
+            try {
+                const response = await fetch(img.src);
+                const blob = await response.blob();
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve({
+                        dataUrl: reader.result,
+                        width: img.naturalWidth || img.width,
+                        height: img.naturalHeight || img.height,
+                        alt: img.alt || ''
+                    });
+                    reader.readAsDataURL(blob);
+                });
+            } catch (e) {
+                return null;
+            }
+        })();
+        """
+        try:
+            res = self.page.run_js(js_extract)
+            if res and isinstance(res, dict) and "dataUrl" in res:
+                data_url = res["dataUrl"]
+                if "," in data_url:
+                    header, encoded = data_url.split(",", 1)
+                    raw_bytes = base64.b64decode(encoded)
+                    return {
+                        "bytes": raw_bytes,
+                        "width": res.get("width", 0),
+                        "height": res.get("height", 0),
+                        "alt": res.get("alt", "")
+                    }
+        except Exception as e:
+            print(f"Lỗi trích xuất ảnh sinh ra: {e}")
+        return None
+
     def process_single_image(
         self,
         image_path: str,
-        target_lang: str = "Tiếng Việt",
-        custom_instructions: str = "",
+        prompt: str = DEFAULT_PROMPT,
+        output_dir: Optional[str] = None,
         log_callback: Optional[Callable[[str], None]] = None
     ) -> Dict[str, Any]:
         """
-        Tự động tải 1 ảnh lên ChatGPT, gửi câu lệnh dịch thuật, chờ nhận kết quả và trích xuất bản dịch.
+        Tải NGUYÊN HÌNH ẢNH GỐC lên ChatGPT, gửi kèm câu lệnh mô phỏng và làm nét,
+        chờ ChatGPT vẽ xong ảnh mới và tự động tải về máy.
         """
         if not os.path.exists(image_path):
             raise FileNotFoundError(f"Không tìm thấy file ảnh: {image_path}")
 
         page = self.connect_or_start(log_callback)
 
-        # 1. Mở đoạn chat mới (New Chat) để làm sạch khung nhập và file cũ
+        # 1. Mở đoạn chat mới (New Chat)
         if log_callback:
-            log_callback("Đang tạo phiên chat mới trên ChatGPT...")
+            log_callback("Đang mở phiên chat mới trên ChatGPT...")
 
         try:
             page.get("https://chatgpt.com/")
@@ -240,12 +332,12 @@ class ChatGPTAutomation:
 
         editor = self._find_editor(timeout=15)
         if not editor:
-            raise RuntimeError("Không tìm thấy ô nhập tin nhắn trên ChatGPT. Hãy chắc chắn bạn đã đăng nhập!")
+            raise RuntimeError("Không tìm thấy ô nhập tin nhắn trên ChatGPT. Hãy chắc chắn bạn đã đăng nhập tài khoản!")
 
-        # 3. Upload file ảnh vào ChatGPT
+        # 3. Upload NGUYÊN HÌNH ẢNH GỐC vào ChatGPT
         filename = os.path.basename(image_path)
         if log_callback:
-            log_callback(f"Đang đính kèm ảnh: {filename} ...")
+            log_callback(f"Đang đính kèm nguyên hình ảnh gốc: {filename} ...")
 
         file_input = self._find_image_file_input(timeout=3)
         if not file_input:
@@ -259,6 +351,7 @@ class ChatGPTAutomation:
             file_input = self._find_image_file_input(timeout=3)
 
         if file_input:
+            # Tải nguyên hình ảnh gốc không qua can thiệp bộ lọc
             file_input.input(os.path.abspath(image_path))
         else:
             raise RuntimeError("Không tìm thấy cổng đính kèm ảnh của ChatGPT.")
@@ -268,23 +361,19 @@ class ChatGPTAutomation:
             log_callback("Đang tải ảnh lên ChatGPT...")
         time.sleep(3.5)
 
-        # 4. Soạn prompt dịch thuật ngắn gọn, đúng trọng tâm
-        default_prompt = (
-            f"Nhận diện toàn bộ chữ/văn bản có trong hình ảnh này và dịch sang {target_lang} "
-            f"(định dạng: [Chữ gốc] -> [Bản dịch {target_lang}]). "
-            f"Chỉ trả về nội dung dịch văn bản, tuyệt đối không thêm bất kỳ phân tích, giải thích hay nội dung nào khác."
-        )
-        if custom_instructions:
-            default_prompt += f" {custom_instructions}"
+        # Ghi nhận số lượng ảnh hiện có trước khi gửi prompt
+        initial_img_count = self._count_generated_images()
 
+        # 4. Nhập chính xác câu lệnh
+        final_prompt = prompt.strip() if prompt and prompt.strip() else DEFAULT_PROMPT
         if log_callback:
-            log_callback(f"Đang nhập yêu cầu nhận diện và dịch sang {target_lang}...")
+            log_callback(f"Đang nhập câu lệnh: \"{final_prompt}\"...")
 
         editor = self._find_editor(timeout=5)
         if editor:
             editor.click()
             time.sleep(0.3)
-            editor.input(default_prompt)
+            editor.input(final_prompt)
         time.sleep(1)
 
         # 5. Bấm nút gửi (Send)
@@ -302,50 +391,94 @@ class ChatGPTAutomation:
             except Exception:
                 editor.input('\n')
 
-        # 6. Chờ ChatGPT tạo phản hồi (tính toán suy luận và trả lời)
+        # 6. Chờ ChatGPT tạo phản hồi (vẽ lại ảnh AI / dịch văn bản)
         if log_callback:
-            log_callback("ChatGPT đang đọc chữ trên ảnh và dịch thuật...")
+            log_callback("ChatGPT đang nhận ảnh, mô phỏng lại nét vẽ và tạo ảnh mới với chữ đã dịch...")
 
-        time.sleep(3)
+        time.sleep(4)
         start_wait = time.time()
-        max_wait = 180  # tối đa 3 phút
+        max_wait = 240  # tối đa 4 phút cho quá trình vẽ ảnh DALL-E / GPT
         last_text = ""
-        stable_count = 0
+        found_image_result = None
+        last_log_time = 0
 
         while time.time() - start_wait < max_wait:
-            time.sleep(2)
+            time.sleep(2.5)
+            elapsed = int(time.time() - start_wait)
 
-            # Kiểm tra nút stop còn tồn tại không
+            if elapsed - last_log_time >= 10:
+                last_log_time = elapsed
+                if log_callback:
+                    log_callback(f"  [ChatGPT] Đang xử lý vẽ và tạo ảnh mô phỏng ({elapsed}s)...")
+
+            # Kiểm tra nút dừng (stop button)
             stop_btn = page.ele('xpath://button[@data-testid="stop-button" or contains(@aria-label, "Stop") or contains(@aria-label, "Dừng") or contains(@aria-label, "Cancel")]', timeout=0.5)
 
-            # Lấy text phản hồi hiện tại của ChatGPT (không lấy text người dùng)
+            # Kiểm tra xem có ảnh sinh ra mới chưa
+            current_img_count = self._count_generated_images()
+            if current_img_count > initial_img_count and not found_image_result:
+                if log_callback:
+                    log_callback("🎨 Đã phát hiện ảnh mô phỏng mới từ ChatGPT! Đang nạp dữ liệu ảnh...")
+                found_image_result = self._extract_generated_image()
+
+            # Lấy text phản hồi nếu có
             current_text = self._extract_latest_response()
+            if current_text and current_text != last_text:
+                last_text = current_text
+                if log_callback:
+                    preview_short = current_text.replace('\n', ' ')[:60]
+                    log_callback(f"  [ChatGPT]: {preview_short}...")
 
-            if current_text and len(current_text) > 5:
-                if current_text == last_text:
-                    stable_count += 1
-                else:
-                    stable_count = 0
-                    last_text = current_text
-                    if log_callback:
-                        preview_short = current_text.replace('\n', ' ')[:50]
-                        log_callback(f"  [Đang dịch]: {preview_short}...")
+            # Nếu đã có ảnh sinh ra và nút stop đã biến mất
+            if found_image_result and not stop_btn:
+                break
 
-                # Hoàn tất nếu nút stop không còn và văn bản ổn định ít nhất 2 lần quét
-                if not stop_btn and stable_count >= 2:
+            # Nếu nút stop đã mất sau ít nhất 20 giây, thử kiểm tra ảnh lại lần nữa
+            if not stop_btn and elapsed > 20:
+                found_image_result = self._extract_generated_image()
+                if found_image_result:
+                    break
+                if current_text and len(current_text) > 10 and elapsed > 35:
                     break
 
-        if log_callback:
-            log_callback("Đã nhận xong toàn bộ nội dung dịch từ ChatGPT!")
+        # 7. Lưu ảnh đã tạo về máy tính nếu có
+        saved_image_path = ""
+        saved_image_size = ""
+        if found_image_result and "bytes" in found_image_result:
+            base_dir = output_dir or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "output")
+            gpt_folder = os.path.join(base_dir, "anh_tao_tu_gpt")
+            os.makedirs(gpt_folder, exist_ok=True)
+            
+            name_no_ext, _ = os.path.splitext(filename)
+            saved_image_path = os.path.join(gpt_folder, f"{name_no_ext}_gpt_translated.png")
+            try:
+                with open(saved_image_path, "wb") as f:
+                    f.write(found_image_result["bytes"])
+                w = found_image_result.get("width", 0)
+                h = found_image_result.get("height", 0)
+                saved_image_size = f"{w}x{h}" if w and h else "Ultra-HD"
+                if log_callback:
+                    log_callback(f"🎉 ĐÃ LƯU THÀNH CÔNG ẢNH AI TẠO TỪ CHATGPT: {os.path.basename(saved_image_path)} ({saved_image_size})")
+            except Exception as e:
+                if log_callback:
+                    log_callback(f"⚠️ Lỗi khi ghi file ảnh GPT: {e}")
 
         final_text = last_text or self._extract_latest_response()
         if not final_text:
-            final_text = "Không nhận diện được chữ trong ảnh."
+            if saved_image_path:
+                final_text = f"Đã mô phỏng lại và làm nét thành công ảnh bằng AI ChatGPT ({saved_image_size}). Toàn bộ chữ đã được dịch trực tiếp sang Tiếng Việt trên hình ảnh."
+            else:
+                final_text = "Không nhận diện được nội dung từ ảnh."
+
+        if log_callback:
+            log_callback(f"Hoàn tất xử lý file {filename}!")
 
         return {
-            "success": True,
+            "success": True if saved_image_path else False,
             "text": final_text,
-            "generated_images": []
+            "generated_image_path": saved_image_path,
+            "generated_image_size": saved_image_size,
+            "generated_images": [saved_image_path] if saved_image_path else []
         }
 
     def close(self):

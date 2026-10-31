@@ -1,10 +1,10 @@
 # ỨNG DỤNG TỰ ĐỘNG DỊCH ẢNH VÀ LÀM NÉT QUA CHATGPT (AI IMAGE TRANSLATOR & ENHANCER)
 
 Ứng dụng chuyên nghiệp giúp bạn:
-1. **Làm nét & Nâng cấp độ phân giải hình ảnh (Super-Resolution 2x / 4x)**: Sử dụng các thuật toán đồ họa và xử lý ảnh chuyên sâu (Lanczos, Unsharp Masking, CLAHE, Bilateral Filter) giúp khôi phục chi tiết mờ, tăng độ sắc cạnh và làm nổi bật văn bản trong ảnh.
-2. **Tự động hóa Chrome tương tác với ChatGPT**: Tự động mở trình duyệt, đính kèm từng ảnh lên ChatGPT, gửi câu lệnh dịch thuật ngữ cảnh và phân tích hình ảnh theo thời gian thực.
-3. **Lưu phiên đăng nhập vĩnh viễn**: Profile Chrome được lưu trữ riêng biệt, bạn chỉ cần đăng nhập tài khoản ChatGPT (Plus hoặc Free) 1 lần duy nhất, các lần sau ứng dụng sẽ tự động nhận diện tài khoản mà không cần đăng nhập lại.
-4. **Xuất báo cáo tổng hợp ra 1 file kết quả**: Hỗ trợ xuất file báo cáo **Excel (.xlsx)**, **Báo cáo trực quan HTML (.html)** và **Tài liệu Word (.docx)** chứa toàn bộ đối chiếu ảnh trước/sau và nội dung dịch chi tiết.
+1. **Mô phỏng lại, Làm nét & Dịch chữ trực tiếp lên hình ảnh qua AI ChatGPT**: Tự động tải ảnh lên ChatGPT, gửi câu lệnh yêu cầu vẽ lại ảnh sắc nét và dịch toàn bộ chữ trên ảnh sang tiếng Việt (hoặc ngôn ngữ tùy chọn), sau đó tự động tải ảnh tuyệt đẹp sinh ra từ ChatGPT lưu về máy tính.
+2. **Làm nét cục bộ & Siêu phân giải (Super-Resolution 2x / 4x)**: Sử dụng các thuật toán đồ họa chuyên sâu (Lanczos, Unsharp Masking, CLAHE) giúp tăng cường chi tiết cho ảnh.
+3. **Lưu phiên đăng nhập vĩnh viễn**: Profile Chrome được lưu trữ riêng biệt, bạn chỉ cần đăng nhập tài khoản ChatGPT 1 lần duy nhất, các lần sau ứng dụng sẽ tự động nhận diện tài khoản mà không cần đăng nhập lại.
+4. **Xuất báo cáo tổng hợp ra 1 file kết quả**: Hỗ trợ xuất file báo cáo **Excel (.xlsx)**, **Báo cáo trực quan HTML (.html)** và **Tài liệu Word (.docx)** chứa toàn bộ đối chiếu ảnh gốc, ảnh AI sinh ra và nội dung dịch chi tiết.
 
 ---
 
@@ -25,37 +25,38 @@ python main.py
 ### Bước 1: Mở Chrome và Đăng nhập ChatGPT
 1. Trên giao diện ứng dụng, bấm nút **🌐 Mở Chrome Đăng Nhập GPT**.
 2. Một cửa sổ Google Chrome sẽ xuất hiện và truy cập vào `https://chatgpt.com/`.
-3. Bạn tiến hành đăng nhập tài khoản ChatGPT của mình (bằng Google, Email, Apple, v.v.).
+3. Bạn tiến hành đăng nhập tài khoản ChatGPT của mình.
 4. Sau khi đăng nhập thành công, bạn quay lại ứng dụng và bấm nút **🔍 Kiểm Tra Đăng Nhập**. Khi thông báo hiển thị màu xanh lá: `Trạng thái: Đã đăng nhập ChatGPT thành công! ✅`, bạn đã sẵn sàng!
 > 💡 *Lưu ý: Bạn chỉ cần thực hiện bước này trong lần đầu sử dụng. Những lần sau mở ứng dụng, Chrome sẽ tự động ghi nhớ tài khoản.*
 
 ### Bước 2: Nạp hình ảnh cần xử lý
 - Bấm **📁 Chọn File Ảnh...** để chọn một hoặc nhiều ảnh cùng lúc (`.png`, `.jpg`, `.jpeg`, `.webp`, `.bmp`).
 - Hoặc bấm **📂 Chọn Thư Mục...** để quét toàn bộ ảnh trong một thư mục bất kỳ.
-- Bạn cũng có thể bấm vào từng ảnh trong bảng danh sách bên trái để xem trước ảnh gốc ở khung bên phải.
+- Bấm vào từng ảnh trong bảng danh sách bên trái để xem trước ảnh gốc ở khung bên phải.
 
-### Bước 3: Cài đặt chế độ dịch & làm nét
-- **Ngôn ngữ dịch**: Mặc định là `Tiếng Việt`, bạn có thể chọn sang `English`, `Tiếng Nhật`, `Tiếng Hàn`, `Tiếng Trung`, v.v.
-- **Chế độ làm nét**:
-  - `Siêu nét 2x (Cân bằng & Sắc sảo)`: Tăng gấp đôi độ phân giải, giữ nguyên nét tự nhiên.
-  - `Siêu nét 4x (Ultra HD)`: Nâng cấp cực đại độ phân giải cho các ảnh nhỏ hoặc mờ nhiều.
-  - `Tối ưu tương phản & văn bản`: Tăng độ tương phản viền chữ, phù hợp với truyện tranh, tài liệu scan, bìa sách.
-- **Định dạng file xuất kết quả**: Tích chọn `Excel (.xlsx)`, `HTML (.html)` và `Word (.docx)`.
+### Bước 3: Cài đặt chế độ & Câu lệnh Prompt
+- **Chế độ xử lý**:
+  - `✨ Mô phỏng & Làm nét & Dịch trực tiếp lên ảnh qua GPT (Khuyên dùng)`: Tự động gửi lệnh tạo ảnh mới với chữ đã dịch tiếng Việt trên ảnh.
+  - `📝 Chỉ nhận diện & Dịch văn bản trên ảnh (OCR Translation)`: Chỉ trích xuất chữ thành dạng text.
+- **Ngôn ngữ dịch**: Mặc định là `Tiếng Việt`, có thể chọn `English`, `Tiếng Nhật`, `Tiếng Hàn`, `Tiếng Trung`, v.v.
+- **Câu lệnh Prompt gửi ChatGPT**:
+  - Mặc định: `mô phỏng lại hình ảnh và làm nét hình ảnh, dịch text trên hình sang tiếng việt`
+  - Bạn có thể chỉnh sửa tự do câu lệnh này để thêm yêu cầu mong muốn (ví dụ: giữ nguyên phong cách, font chữ nghệ thuật, v.v.).
 
 ### Bước 4: Bắt đầu tiến trình
-- Bấm nút to nổi bật **🚀 BẮT ĐẦU DỊCH & LÀM NÉT HÀNG LOẠT**.
-- Ứng dụng sẽ tự động thực hiện tuần tự:
-  1. Nâng cấp và làm nét hình ảnh (lưu vào thư mục `output/anh_da_lam_net/`).
-  2. Mở kết nối Chrome ChatGPT, đính kèm ảnh và gửi yêu cầu dịch toàn bộ chữ sang ngôn ngữ đích.
-  3. Lấy nội dung bản dịch từ GPT hiển thị trực tiếp lên tab **Bản Dịch & Phân Tích (GPT)**.
-  4. Hiển thị đối chiếu ảnh gốc và ảnh đã làm nét trên tab **So Sánh Trước & Sau**.
-  5. Cập nhật thanh tiến trình % theo thời gian thực.
+- Bấm nút to nổi bật **🚀 BẮT ĐẦU DỊCH & MÔ PHỎNG LÀM NÉT QUA GPT**.
+- Ứng dụng sẽ tự động thực hiện:
+  1. Tải ảnh lên ChatGPT.
+  2. Gửi câu lệnh mô phỏng và dịch chữ.
+  3. Chờ ChatGPT vẽ và hoàn thành ảnh mới.
+  4. Tự động tải ảnh AI chất lượng cao về thư mục `output/anh_tao_tu_gpt/`.
+  5. Hiển thị đối chiếu ảnh gốc và ảnh GPT tạo trực tiếp trên giao diện tab **So Sánh Trước & Sau**.
 
 ### Bước 5: Xem và mở file kết quả
-Khi tiến trình hoàn thành, ứng dụng sẽ tự động xuất báo cáo tổng hợp. Bạn chỉ cần bấm:
-- **📊 Mở File Excel Kết Quả**: Xem bảng dữ liệu Excel gồm tên file, kích thước trước/sau, nội dung dịch đầy đủ và đường dẫn ảnh.
-- **🌐 Mở Báo Cáo HTML Trực Quan**: Xem trang giao diện đẹp mắt trên trình duyệt với hình ảnh so sánh cạnh nhau và bản dịch.
-- **📂 Mở Thư Mục Kết Quả**: Mở thư mục chứa toàn bộ ảnh đã làm nét và các file báo cáo.
+- **✨ Xem Ảnh GPT (Kích Thước Gốc)**: Bấm trực tiếp trên giao diện để mở ảnh kết quả bằng trình xem ảnh mặc định của máy tính.
+- **📊 Mở File Excel Kết Quả**: Xem bảng dữ liệu Excel tổng hợp.
+- **🌐 Mở Báo Cáo HTML Trực Quan**: Xem trang giao diện đẹp mắt trên trình duyệt với hình ảnh so sánh cạnh nhau.
+- **🎨 Thư Mục Ảnh GPT**: Mở trực tiếp thư mục chứa toàn bộ ảnh tuyệt đẹp do GPT tạo ra.
 
 ---
 
@@ -64,7 +65,7 @@ Khi tiến trình hoàn thành, ứng dụng sẽ tự động xuất báo cáo 
 ```text
 ├── core/
 │   ├── chatgpt_bot.py       # Module tự động hóa Chrome ChatGPT bằng DrissionPage
-│   ├── enhancer.py          # Module làm nét & siêu phân giải ảnh (OpenCV & Pillow)
+│   ├── enhancer.py          # Module làm nét cục bộ (OpenCV & Pillow)
 │   ├── exporter.py          # Module xuất báo cáo Excel, HTML, Word
 │   └── __init__.py
 ├── gui/
@@ -72,9 +73,12 @@ Khi tiến trình hoàn thành, ứng dụng sẽ tự động xuất báo cáo 
 │   ├── styles.py            # Giao diện QSS phong cách phẳng hiện đại
 │   └── __init__.py
 ├── chrome_profile/          # Thư mục lưu trữ cookies & phiên đăng nhập ChatGPT
-├── output/                  # Thư mục chứa ảnh đã làm nét và các file báo cáo xuất ra
+├── output/
+│   ├── anh_tao_tu_gpt/      # Thư mục chứa các ảnh AI đã mô phỏng, làm nét và dịch
+│   ├── anh_da_lam_net/      # Thư mục chứa ảnh làm nét cục bộ
+│   └── [Báo cáo Excel, HTML, Word]
 ├── main.py                  # File thực thi chính của ứng dụng
 ├── run.bat                  # File nhấp đúp chạy nhanh trên Windows
+├── requirements.txt         # Danh sách thư viện phụ thuộc
 └── README.md                # Tài liệu hướng dẫn sử dụng
 ```
-
