@@ -6,6 +6,7 @@ Hỗ trợ xuất ra:
 3. File Word (.docx) chứa bảng biểu và ảnh nhúng trực tiếp.
 """
 
+from typing import Optional
 import os
 import html
 from datetime import datetime
